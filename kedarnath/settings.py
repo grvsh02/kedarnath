@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import datetime
 from pathlib import Path
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -170,3 +171,30 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGGING = {
+    "version" : 1,
+    "disable_existing_loggers": False,
+    "formatters": { 
+        'base': {
+            'format': '{name} at {asctime} ({levelname}) :: {message}',
+            'style': '{'
+        }
+    },
+    "handlers": {
+        "console": {
+            'class':'logging.StreamHandler',
+            'formatter': 'base'
+        }
+    },
+    "loggers": {
+        "main.views": {
+            "handlers": ['console'],
+            "level": 'DEBUG'
+        },
+        "main.auth": {
+            "handlers": ['console'],
+            "formatter": 'base'
+        }
+    }
+}
