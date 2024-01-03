@@ -142,7 +142,7 @@ else:
             "NAME": "attendify",
             "USER": "postgres",
             "PASSWORD": "postgres",
-            "HOST": "localhost",
+            "HOST": "10.31.248.137",
             "PORT": "5432",
         }
     }
