@@ -51,7 +51,7 @@ def check_attendance(request):
     user = request.user
     print(user.username)
     attendance = Attendance.objects.filter(user=user).last()
-    print(attendance.check_in.date())
+    # print(attendance.check_in.date())
     print(date.today())
     if attendance is None or attendance.check_in.date() != date.today():
         locations = Profile.objects.get(user=user).allowed_locations.all()
