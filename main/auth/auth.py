@@ -18,7 +18,7 @@ def login(request):
     if user is not None:
         token_dict = get_jwt_with_user(user)
         response = JsonResponse({"status": 200, "data": {"message": "success"}})
-        response.set_cookie(COOKIE_NAME, json.dumps(token_dict), samesite='None', max_age=259200, secure=True)
+        response.set_cookie(COOKIE_NAME, json.dumps(token_dict), samesite='Lax', max_age=259200, httponly=True)
         return response
     else:
         return JsonResponse({"status": 401, "data": {"message": "failed"}})
