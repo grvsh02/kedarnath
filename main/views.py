@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from main.models import Attendance, LeaveRequest, Profile, Location
+from main.models import Attendance, LeaveRequest, Profile, Location, Reimbursement
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from datetime import date
@@ -225,3 +225,70 @@ def delete_profile(request):
     except Exception as e:
         print(e)
         return JsonResponse({"status": 500, "message": "Profile deletion unsuccessful"})
+
+@csrf_exempt
+def create_reimbursement(request):
+    try:
+        user = request.user
+        res = json.loads(request.body)
+        amount = res["amount"]
+        reason = res["reason"]
+        type_of = res["type"]
+        expense_date = res["expense_date"]
+        reimbursement_data = Reimbursement.objects.create(user=user, amount=amount, reason=reason, type=type_of, expense_date=expense_date)
+        return JsonResponse({"status": 201, "data": reimbursement_data.to_dict()})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Please enter correct details!!!"})
+
+@csrf_exempt
+def get_reimbursements(request):
+    try:
+        user = request.user
+        reimbersments = Reimbursement.objects.filter(user=user)
+        reim_dict = [reim.to_dict() for reim in reimbersments]
+        return JsonResponse({"status": 200, "message": reim_dict})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Reimbursement get unsuccessful"})
+
+
+@csrf_exempt
+def delete_reimbursement(request):
+    try:
+        user = request.user
+        res = json.loads(request.body)
+        reimbursement_id = int(res["id"])
+        reimbursement = Reimbursement.objects.filter(id=reimbursement_id, user=request.user).first()
+        if not reimbursement:
+            return JsonResponse({"status": 404, "message": "Reimbursement not found"})
+        reimbursement.delete()
+        return JsonResponse({"status": 200, "message": "Reimbursement deleted successfully"})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Reimbursement deletion unsuccessful"})
+
+
+@csrf_exempt
+def edit_reimbursement(request):
+    try:
+        user = request.user
+        res = json.loads(request.body)
+        reimbursement_id = int(res["id"])
+        reimbursement = Reimbursement.objects.filter(id=reimbursement_id, user=request.user).first()
+        if not reimbursement:
+            return JsonResponse({"status": 404, "message": "Reimbursement not found"})
+        if "amount" in res:
+            reimbursement.amount = res["amount"]
+        if "reason" in res:
+            reimbursement.reason = res["reason"]
+        if "type" in res:
+            reimbursement.type = res["type"]
+        if "expense_date" in res:
+            reimbursement.expense_date = res["expense_date"]
+        reimbursement.save()
+        return JsonResponse({"status": 200, "message": "Reimbursement updated successfully"})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Reimbursement update unsuccessful"})
+
