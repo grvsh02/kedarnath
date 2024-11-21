@@ -8,6 +8,7 @@ urlpatterns = [
     url(r'^login/$', auth.login, name="login"),
     url(r'^check/in/$', views.check_in, name="signup"),
     url(r'^check/out/$', views.check_out, name="signup"),
+    url(r'^create_reimbursement/$', views.create_reimbursement, name="create_reimbursement"),
     url(r'^attendance/status/$', views.check_attendance, name="signup"),
     url(r'^leave/request/$', views.submit_leave_request, name="signup"),
     url(r'^leave/requests/$', views.get_leave_requests, name="signup"),
@@ -19,8 +20,9 @@ urlpatterns = [
     # url(r'^locations/add/$', views.add_location, name="Add location"),
     # url(r'^locations/edit/$', views.edit_location, name="Edit location"),
     # url(r'^locations/delete/$', views.delete_location, name="Delete location"),
-    # url(r'^location/get/$', views.get_location, name="Get location"),
-
+    url(r'^reimbursement/get/$', views.get_reimbursements, name="Get reimbursement"),
+    url(r'^reimbursement/delete/$', views.delete_reimbursement, name="Delete reimbursement"),
+    url(r'^reimbursement/edit/$', views.edit_reimbursement, name="Edit reimbursement"),
     url(r'^me/profile/create/$', views.create_profile, name="Create Profile"),
     url(r'^me/profile/delete/$', views.delete_profile, name="Delete Profile"),
 
