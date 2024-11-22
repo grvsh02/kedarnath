@@ -23,6 +23,7 @@ urlpatterns = [
     url(r'^reimbursement/get/$', views.get_reimbursements, name="Get reimbursement"),
     url(r'^reimbursement/delete/$', views.delete_reimbursement, name="Delete reimbursement"),
     url(r'^reimbursement/edit/$', views.edit_reimbursement, name="Edit reimbursement"),
+    url(r'^payroll/create/$', views.create_payroll, name="Create Payroll"),
     url(r'^me/profile/create/$', views.create_profile, name="Create Profile"),
     url(r'^me/profile/delete/$', views.delete_profile, name="Delete Profile"),
 
