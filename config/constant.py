@@ -1,2 +1,2 @@
 
-COOKIE_NAME = "ccube_dev"
+COOKIE_NAME = "attendify"

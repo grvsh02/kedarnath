@@ -29,3 +29,10 @@ def logout(request):
     response.delete_cookie(COOKIE_NAME)
     print("logged out")
     return response
+
+@csrf_exempt
+def get_token(request):
+    token_dict = json.loads(request.COOKIES.get(COOKIE_NAME))
+    access_token = token_dict['access']
+    refresh_token = token_dict['refresh']
+    return JsonResponse({"status": 200, "data": {"access_token": access_token, "refresh_token": refresh_token}})

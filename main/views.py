@@ -1,6 +1,7 @@
 import datetime
 import json
 
+from main.auth.wrapper import auth_required
 from main.models import Attendance, LeaveRequest, Profile, Location
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -9,6 +10,7 @@ from django.contrib.auth.models import User
 
 
 @csrf_exempt
+@auth_required
 def check_in(request):
     try:
         user = request.user
@@ -31,6 +33,7 @@ def check_in(request):
 
 
 @csrf_exempt
+@auth_required
 def check_out(request):
     try:
         user = request.user
@@ -47,6 +50,7 @@ def check_out(request):
 
 
 @csrf_exempt
+@auth_required
 def check_attendance(request):
     user = request.user
     print(user.username)
@@ -61,6 +65,7 @@ def check_attendance(request):
 
 
 @csrf_exempt
+@auth_required
 def submit_leave_request(request):
     try:
         user = request.user
@@ -79,6 +84,7 @@ def submit_leave_request(request):
 
 
 @csrf_exempt
+@auth_required
 def get_leave_requests(request):
     user = request.user
     leave_requests = LeaveRequest.objects.filter(user=user).order_by("-created_at")
@@ -89,14 +95,15 @@ def get_leave_requests(request):
 
 
 @csrf_exempt
+@auth_required
 def me(request):
     user = request.user
     return JsonResponse({"status": 200,
                          "data": {"username": user.username, "email": user.email, "first_name": user.first_name,
                                   "last_name": user.last_name}})
 
-
 @csrf_exempt
+@auth_required
 def edit_profile(request):
     user = request.user
     res = json.loads(request.body)
@@ -119,6 +126,7 @@ def edit_profile(request):
 
 
 @csrf_exempt
+@auth_required
 def get_profile(request):
     user = request.user
     user_profile = Profile.objects.get(user=user)
@@ -146,6 +154,7 @@ def get_profile(request):
 
 
 @csrf_exempt
+@auth_required
 def admin_dashboard(request):
     user = request.user
     if user.is_superuser:
@@ -170,6 +179,7 @@ def admin_dashboard(request):
 
 
 @csrf_exempt
+@auth_required
 def get_locations(request):
     user = request.user
     if user.is_superuser:
@@ -181,6 +191,7 @@ def get_locations(request):
 
 
 @csrf_exempt
+@auth_required
 def create_profile(request):
     try: 
         user = request.user
@@ -203,15 +214,14 @@ def create_profile(request):
             salary = None
 
         user = User.objects.create_user(username=user, email=user, password=user)
-        profiledata = Profile.objects.create(user=user, phone = phone, address=address, city = city, state  = state, country = country, pincode = pincode, job_title = job_title, date_of_birth = date_of_birth, date_of_joining = date_of_joining, salary = salary)
-        return JsonResponse({"status": 201, "data": profiledata.to_dict()}) 
+        profile_data = Profile.objects.create(user=user, phone = phone, address=address, city = city, state  = state, country = country, pincode = pincode, job_title = job_title, date_of_birth = date_of_birth, date_of_joining = date_of_joining, salary = salary)
+        return JsonResponse({"status": 201, "data": profile_data.to_dict()})
     except Exception as e:
         print(e)
         return JsonResponse({"status": 500, "message": "Profile creation unsuccessful"})
 
-
-
 @csrf_exempt
+@auth_required
 def delete_profile(request):
     try:
         user = request.user
