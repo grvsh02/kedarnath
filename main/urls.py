@@ -1,5 +1,4 @@
 from django.urls import re_path as url
-
 from main.auth import auth
 from main import views
 
@@ -20,8 +19,13 @@ urlpatterns = [
     # url(r'^locations/edit/$', views.edit_location, name="Edit location"),
     # url(r'^locations/delete/$', views.delete_location, name="Delete location"),
     # url(r'^location/get/$', views.get_location, name="Get location"),
-
+    url(r'^get-token/$', auth.get_token, name="Get token"),
     url(r'^me/profile/create/$', views.create_profile, name="Create Profile"),
     url(r'^me/profile/delete/$', views.delete_profile, name="Delete Profile"),
+    url(r'^payroll/create/$', views.create_payroll, name="Create Payroll"),
+    url(r'^create_reimbursement/$', views.create_reimbursement, name="create_reimbursement"),
+    url(r'^reimbursement/get/$', views.get_reimbursements, name="Get reimbursement"),
+    url(r'^reimbursement/edit/$', views.edit_reimbursement, name="Edit reimbursement"),
+    url(r'^profile/get/pdf/$', views.generate_employee_pdf, name="Profile PDF"),
 
 ]
