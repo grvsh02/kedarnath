@@ -1,13 +1,18 @@
+import os
 import datetime
 import json
-
+from django.contrib.auth.decorators import login_required
 from main.auth.wrapper import auth_required
-from main.models import Attendance, LeaveRequest, Profile, Location
+from main.models import Attendance, LeaveRequest, Profile, Location, Reimbursement, Payroll
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from datetime import date
 from django.contrib.auth.models import User
-
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.conf import settings
 
 @csrf_exempt
 @auth_required
@@ -129,28 +134,48 @@ def edit_profile(request):
 @auth_required
 def get_profile(request):
     user = request.user
-    user_profile = Profile.objects.get(user=user)
-    attendance = Attendance.objects.filter(user=user).order_by("-check_in")[0:7]
-    attendance = [attendance.to_dict() for attendance in attendance]
-    print(attendance)
-    graph_data = {"labels": [], "data": []}
-    hours_worked = 0
-    avg_hours = 0
-    days_worked = 0
-    for attendance in attendance:
-        print(attendance["check_in"], attendance["check_out"])
-        graph_data["labels"].append(attendance["check_in"].date())
-        try:
-            graph_data["data"].append(int(attendance["check_out"].hour - attendance["check_in"].hour))
-            hours_worked += int(attendance["check_out"].hour - attendance["check_in"].hour)
-        except:
-            graph_data["data"].append(0)
-        print(graph_data)
-        avg_hours = hours_worked / len(graph_data["data"])
-        days_worked = len(graph_data["data"])
-    return JsonResponse({"status": 200, "data": user_profile.to_dict(), "graph_data": graph_data,
-                         "stats_data": {"hours_worked": hours_worked, "avg_hours": avg_hours,
-                                        "days_worked": days_worked}})
+    try:
+        user_profile = Profile.objects.get(user=user)
+
+        attendance = Attendance.objects.filter(user=user).order_by("-check_in")[:7]
+        attendance = [att.to_dict() for att in attendance]
+
+        graph_data = {"labels": [], "data": []}
+        hours_worked = 0
+        avg_hours = 0
+        days_worked = 0
+
+        for att in attendance:
+            graph_data["labels"].append(att["check_in"].date())
+            # Check if check_out exists
+            if att["check_out"] is not None:
+                worked_hours = att["check_out"].hour - att["check_in"].hour
+                graph_data["data"].append(worked_hours)
+                hours_worked += max(worked_hours, 0)  # Ensure no negative hours are added
+            else:
+                graph_data["data"].append(0)  # Use 0 hours for incomplete records
+
+        if graph_data["data"]:
+            avg_hours = hours_worked / len(graph_data["data"])
+            days_worked = len([data for data in graph_data["data"] if data > 0])
+
+        payroll = Payroll.objects.filter(profile=user_profile).first()
+        payroll_data = payroll.to_dict() if payroll else None
+
+        return JsonResponse({
+            "status": 200,
+            "data": user_profile.to_dict(),
+            "graph_data": graph_data,
+            "stats_data": {"hours_worked": hours_worked, "avg_hours": avg_hours, "days_worked": days_worked},
+            "payroll_data": payroll_data
+        })
+
+    except Profile.DoesNotExist:
+        return JsonResponse({"status": 404, "message": "Profile not found"})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Internal Server Error"})
+
 
 
 @csrf_exempt
@@ -235,3 +260,162 @@ def delete_profile(request):
     except Exception as e:
         print(e)
         return JsonResponse({"status": 500, "message": "Profile deletion unsuccessful"})
+
+@csrf_exempt
+@auth_required
+def create_reimbursement(request):
+    try:
+        user = request.user
+        res = json.loads(request.body)
+        amount = res["amount"]
+        reason = res["reason"]
+        type_of = res["type"]
+        expense_date = res["expense_date"]
+        reimbursement_data = Reimbursement.objects.create(user=user, amount=amount, reason=reason, type=type_of, expense_date=expense_date)
+        return JsonResponse({"status": 201, "data": reimbursement_data.to_dict()})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Please enter correct details!!!"})
+
+@csrf_exempt
+@auth_required
+def get_reimbursements(request):
+    try:
+        user = request.user
+        reimbersments = Reimbursement.objects.filter(user=user)
+        reim_dict = [reim.to_dict() for reim in reimbersments]
+        return JsonResponse({"status": 200, "message": reim_dict})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Reimbursement not found"})
+
+@csrf_exempt
+@auth_required
+def edit_reimbursement(request):
+    try:
+        user = request.user
+        res = json.loads(request.body)
+        reimbursement_id = int(res["id"])
+        reimbursement = Reimbursement.objects.filter(id=reimbursement_id, user=request.user).first()
+        if not reimbursement:
+            return JsonResponse({"status": 404, "message": "Reimbursement not found"})
+        if "amount" in res:
+            reimbursement.amount = res["amount"]
+        if "reason" in res:
+            reimbursement.reason = res["reason"]
+        if "type" in res:
+            reimbursement.type = res["type"]
+        if "expense_date" in res:
+            reimbursement.expense_date = res["expense_date"]
+        reimbursement.save()
+        return JsonResponse({"status": 200, "message": "Reimbursement updated successfully"})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Reimbursement update unsuccessful"})
+
+@csrf_exempt
+@auth_required
+def create_payroll(request):
+    if request.method != "POST":
+        return JsonResponse({"status": 405, "message": "Method not allowed"})
+
+    try:
+        user = request.user  # Get the logged-in user
+        profile = Profile.objects.get(user=user)
+
+        data = json.loads(request.body)
+        required_fields = ["basic_salary", "hra", "special_allowance", "tax_deduction", "reimbursement_amount"]
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return JsonResponse({"status": 400, "message": f"Missing fields: {', '.join(missing_fields)}"})
+
+        payroll = Payroll.objects.create(
+            profile=profile,
+            basic_salary=data["basic_salary"],
+            hra=data["hra"],
+            special_allowance=data["special_allowance"],
+            tax_deduction=data["tax_deduction"],
+            reimbursement_amount=data["reimbursement_amount"],
+        )
+
+        payroll.calculate_final_salary()
+
+        return JsonResponse({"status": 201, "data": payroll.to_dict()})
+
+    except Profile.DoesNotExist:
+        return JsonResponse({"status": 404, "message": "Profile not found for the logged-in user"})
+    except Exception as e:
+        print(f"Error in create_payroll: {e}")
+        return JsonResponse({"status": 500, "message": "Internal Server Error"})
+
+
+@csrf_exempt
+@auth_required
+def generate_employee_pdf(request):
+    """
+    Generate a PDF for the logged-in user with their Profile and Payroll details.
+    """
+    try:
+        user = request.user 
+        pdf_directory = os.path.join(settings.BASE_DIR, "pdfs")
+        os.makedirs(pdf_directory, exist_ok=True)
+
+        profile = Profile.objects.filter(user=user).first()
+        if not profile:
+            return HttpResponse("Profile data not found for the logged-in user.", status=404)
+
+        payroll = Payroll.objects.filter(profile=profile).first()
+        if not payroll:
+            return HttpResponse("Payroll data not found for the logged-in user.", status=404)
+
+        pdf_path = os.path.join(pdf_directory, f"{user.username}_details.pdf")
+        pdf = canvas.Canvas(pdf_path, pagesize=letter)
+        pdf.setTitle("Employee Payroll Details")
+        pdf.setFont("Helvetica-Bold", 16)
+        pdf.drawString(200, 750, "Employee Payroll Details")
+        pdf.setFont("Helvetica", 12)
+
+        y_position = 700
+        pdf.drawString(50, y_position, f"Name: {user.get_full_name()}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Username: {user.username}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Phone: {profile.phone or 'N/A'}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Address: {profile.address or 'N/A'}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Job Title: {profile.job_title or 'N/A'}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Date of Joining: {profile.date_of_joining or 'N/A'}")
+        y_position -= 20
+
+        pdf.setFont("Helvetica-Bold", 14)
+        y_position -= 20
+        pdf.drawString(50, y_position, "Payroll Details")
+        pdf.setFont("Helvetica", 12)
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Basic Salary: {payroll.basic_salary}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"HRA: {payroll.hra}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Special Allowance: {payroll.special_allowance}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Tax Deduction: {payroll.tax_deduction}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Reimbursement Amount: {payroll.reimbursement_amount}")
+        y_position -= 20
+        pdf.drawString(50, y_position, f"Final Salary: {payroll.final_salary}")
+        y_position -= 40
+
+        pdf.setFont("Helvetica-Oblique", 10)
+        pdf.drawString(50, 50, "Generated by Employee Management System")
+        pdf.save()
+
+        with open(pdf_path, "rb") as f:
+            response = HttpResponse(f.read(), content_type="application/pdf")
+            response["Content-Disposition"] = f"attachment; filename={user.username}_details.pdf"
+            return response
+
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        return HttpResponse("Error generating PDF.", status=500)

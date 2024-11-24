@@ -21,6 +21,8 @@ class Profile(models.Model):
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     allowed_locations = models.ManyToManyField("Location", blank=True)
+    manager = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="managed_profiles")
+    hr = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="hr_profiles")
 
     def to_dict(self):
         return {
@@ -35,6 +37,8 @@ class Profile(models.Model):
             "is_admin": self.is_admin,
             "is_active": self.is_active,
             "is_deleted": self.is_deleted,
+            "manager": self.manager.username if self.manager else None,
+            "hr": self.hr.username if self.hr else None,
         }
 
 
@@ -123,10 +127,51 @@ class Reimbursement(models.Model):
 
     def to_dict(self):
         return {
+            "id": self.id,
             "user": self.user.username,
             "amount": self.amount,
             "reason": self.reason,
             "status": self.status,
             "type": self.type,
             "expense_date": self.expense_date,
+        }
+
+class Payroll(models.Model):
+    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="payroll", null=True)
+    basic_salary = models.DecimalField(max_digits=10, decimal_places=2)
+    hra = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    special_allowance = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    tax_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    reimbursement_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    final_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def calculate_final_salary(self):
+        """
+        Compute the final salary after applying breakups, reimbursements, and deductions.
+        """
+        self.final_salary = (
+            self.basic_salary 
+            + self.hra 
+            + self.special_allowance 
+            - self.tax_deduction 
+            + self.reimbursement_amount
+        )
+        self.save()
+
+    def to_dict(self):
+        """
+        Convert the Payroll object to a dictionary, including Profile details like username.
+        """
+        return {
+            "employee": self.profile.user.username,  
+            "basic_salary": self.basic_salary,
+            "hra": self.hra,
+            "special_allowance": self.special_allowance,
+            "tax_deduction": self.tax_deduction,
+            "reimbursement_amount": self.reimbursement_amount,
+            "final_salary": self.final_salary,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
