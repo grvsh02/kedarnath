@@ -2,7 +2,7 @@ import datetime
 import json
 
 from main.auth.wrapper import auth_required
-from main.models import Attendance, LeaveRequest, Profile, Location
+from main.models import Attendance, LeaveRequest, Profile, Location, Payroll
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from datetime import date
@@ -129,28 +129,47 @@ def edit_profile(request):
 @auth_required
 def get_profile(request):
     user = request.user
-    user_profile = Profile.objects.get(user=user)
-    attendance = Attendance.objects.filter(user=user).order_by("-check_in")[0:7]
-    attendance = [attendance.to_dict() for attendance in attendance]
-    print(attendance)
-    graph_data = {"labels": [], "data": []}
-    hours_worked = 0
-    avg_hours = 0
-    days_worked = 0
-    for attendance in attendance:
-        print(attendance["check_in"], attendance["check_out"])
-        graph_data["labels"].append(attendance["check_in"].date())
-        try:
-            graph_data["data"].append(int(attendance["check_out"].hour - attendance["check_in"].hour))
-            hours_worked += int(attendance["check_out"].hour - attendance["check_in"].hour)
-        except:
-            graph_data["data"].append(0)
-        print(graph_data)
-        avg_hours = hours_worked / len(graph_data["data"])
-        days_worked = len(graph_data["data"])
-    return JsonResponse({"status": 200, "data": user_profile.to_dict(), "graph_data": graph_data,
-                         "stats_data": {"hours_worked": hours_worked, "avg_hours": avg_hours,
-                                        "days_worked": days_worked}})
+    try:
+        user_profile = Profile.objects.get(user=user)
+
+        attendance = Attendance.objects.filter(user=user).order_by("-check_in")[:7]
+        attendance = [att.to_dict() for att in attendance]
+
+        graph_data = {"labels": [], "data": []}
+        hours_worked = 0
+        avg_hours = 0
+        days_worked = 0
+
+        for att in attendance:
+            graph_data["labels"].append(att["check_in"].date())
+            # Check if check_out exists
+            if att["check_out"] is not None:
+                worked_hours = att["check_out"].hour - att["check_in"].hour
+                graph_data["data"].append(worked_hours)
+                hours_worked += max(worked_hours, 0)  # Ensure no negative hours are added
+            else:
+                graph_data["data"].append(0)  # Use 0 hours for incomplete records
+
+        if graph_data["data"]:
+            avg_hours = hours_worked / len(graph_data["data"])
+            days_worked = len([data for data in graph_data["data"] if data > 0])
+
+        payroll = Payroll.objects.filter(profile=user_profile).first()
+        payroll_data = payroll.to_dict() if payroll else None
+
+        return JsonResponse({
+            "status": 200,
+            "data": user_profile.to_dict(),
+            "graph_data": graph_data,
+            "stats_data": {"hours_worked": hours_worked, "avg_hours": avg_hours, "days_worked": days_worked},
+            "payroll_data": payroll_data
+        })
+
+    except Profile.DoesNotExist:
+        return JsonResponse({"status": 404, "message": "Profile not found"})
+    except Exception as e:
+        print(e)
+        return JsonResponse({"status": 500, "message": "Internal Server Error"})
 
 
 @csrf_exempt
@@ -235,3 +254,38 @@ def delete_profile(request):
     except Exception as e:
         print(e)
         return JsonResponse({"status": 500, "message": "Profile deletion unsuccessful"})
+
+@csrf_exempt
+@auth_required
+def create_payroll(request):
+    if request.method != "POST":
+        return JsonResponse({"status": 405, "message": "Method not allowed"})
+
+    try:
+        user = request.user  
+        profile = Profile.objects.get(user=user)
+
+        data = json.loads(request.body)
+        required_fields = ["basic_salary", "hra", "special_allowance", "tax_deduction", "reimbursement_amount"]
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return JsonResponse({"status": 400, "message": f"Missing fields: {', '.join(missing_fields)}"})
+
+        payroll = Payroll.objects.create(
+            profile=profile,
+            basic_salary=data["basic_salary"],
+            hra=data["hra"],
+            special_allowance=data["special_allowance"],
+            tax_deduction=data["tax_deduction"],
+            reimbursement_amount=data["reimbursement_amount"],
+        )
+
+        payroll.calculate_final_salary()
+
+        return JsonResponse({"status": 201, "data": payroll.to_dict()})
+
+    except Profile.DoesNotExist:
+        return JsonResponse({"status": 404, "message": "Profile not found for the logged-in user"})
+    except Exception as e:
+        print(f"Error in create_payroll: {e}")
+        return JsonResponse({"status": 500, "message": "Internal Server Error"})
