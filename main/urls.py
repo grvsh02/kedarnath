@@ -20,7 +20,7 @@ urlpatterns = [
     # url(r'^locations/edit/$', views.edit_location, name="Edit location"),
     # url(r'^locations/delete/$', views.delete_location, name="Delete location"),
     # url(r'^location/get/$', views.get_location, name="Get location"),
-
+    url(r'^payroll/create/$', views.create_payroll, name="Create Payroll"),
     url(r'^me/profile/create/$', views.create_profile, name="Create Profile"),
     url(r'^me/profile/delete/$', views.delete_profile, name="Delete Profile"),
 
