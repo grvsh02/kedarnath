@@ -1,6 +1,5 @@
 import datetime
 import json
-from django.contrib.auth.decorators import login_required
 from main.auth.wrapper import auth_required
 from main.models import Attendance, LeaveRequest, Profile, Location, Reimbursement
 from django.views.decorators.csrf import csrf_exempt
@@ -238,7 +237,6 @@ def delete_profile(request):
         print(e)
         return JsonResponse({"status": 500, "message": "Profile deletion unsuccessful"})
 
-
 @csrf_exempt
 @auth_required
 def create_reimbursement(request):
@@ -250,35 +248,21 @@ def create_reimbursement(request):
         type_of = res["type"]
         expense_date = res["expense_date"]
 
-        existing_reimbursement = Reimbursement.objects.filter(
-            user=user, 
-            amount=amount, 
-            reason=reason, 
-            type=type_of, 
-            expense_date=expense_date, 
-            is_approved=True
-        ).first()
-
-        if existing_reimbursement:
-            return JsonResponse({
-                "status": 400, 
-                "message": "Reimbursement is already approved and cannot be recreated."
-            })
-
         reimbursement_data = Reimbursement.objects.create(
-            user=user, 
-            amount=amount, 
-            reason=reason, 
-            type=type_of, 
+            user=user,
+            amount=amount,
+            reason=reason,
+            type=type_of,
             expense_date=expense_date,
-            is_approved=False  
+            is_approved=False
         )
 
         return JsonResponse({"status": 201, "data": reimbursement_data.to_dict()})
 
     except Exception as e:
         print(e)
-        return JsonResponse({"status": 500, "message": "Please enter correct details!!!"})
+        return JsonResponse({"status": 500, "message": "Please enter correct details!"})
+
 
 
 @csrf_exempt
@@ -301,9 +285,14 @@ def edit_reimbursement(request):
         user = request.user
         res = json.loads(request.body)
         reimbursement_id = int(res["id"])
-        reimbursement = Reimbursement.objects.filter(id=reimbursement_id, user=request.user).first()
+=
+        reimbursement = Reimbursement.objects.filter(id=reimbursement_id, user=user).first()
         if not reimbursement:
             return JsonResponse({"status": 404, "message": "Reimbursement not found"})
+
+        if reimbursement.is_approved:
+            return JsonResponse({"status": 403, "message": "Approved reimbursements cannot be edited or deleted"})
+
         if "amount" in res:
             reimbursement.amount = res["amount"]
         if "reason" in res:
@@ -312,8 +301,11 @@ def edit_reimbursement(request):
             reimbursement.type = res["type"]
         if "expense_date" in res:
             reimbursement.expense_date = res["expense_date"]
+
         reimbursement.save()
+
         return JsonResponse({"status": 200, "message": "Reimbursement updated successfully"})
+
     except Exception as e:
         print(e)
         return JsonResponse({"status": 500, "message": "Reimbursement update unsuccessful"})
